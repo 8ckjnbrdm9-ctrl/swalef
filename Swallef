@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>سوالف | غرف صوتية</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Tahoma, Arial, sans-serif;
+      background: radial-gradient(circle at 20% 0%, rgba(99,102,241,.18), transparent 30%), #080b16;
+      color: #f8fafc;
+      min-height: 100vh;
+    }
+    .glass { background: rgba(15, 23, 42, .72); border: 1px solid rgba(148, 163, 184, .12); backdrop-filter: blur(18px); }
+    .glass-light { background: rgba(30, 41, 59, .55); border: 1px solid rgba(148, 163, 184, .12); }
+    .gradient-text { background: linear-gradient(90deg, #818cf8, #c084fc); -webkit-background-clip: text; color: transparent; }
+    .avatar { background: linear-gradient(135deg, #6366f1, #a855f7); }
+    .modal { background: rgba(2, 6, 23, .78); backdrop-filter: blur(8px); }
+  </style>
+</head>
+
+<body>
+
+<header class="glass sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center">
+        <i class="fa-solid fa-microphone text-white text-lg"></i>
+      </div>
+      <h1 class="text-xl md:text-2xl font-black">سوالف <span class="gradient-text">Live</span></h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="loginHeaderBtn" onclick="openLogin()" class="bg-indigo-600 px-4 py-2.5 rounded-xl font-bold hover:bg-indigo-500 transition">تسجيل الدخول</button>
+      <div id="profileArea" class="hidden font-bold px-3 py-1.5 glass-light rounded-xl">
+        <span id="headerUserName">مستخدم</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6">
+
+  <!-- ROOMS GRID -->
+  <section id="roomsSection">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-black">الغرف الصوتية المتاحة</h2>
+      <button onclick="requireLogin(openCreateRoom)" class="bg-indigo-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-500 transition">إنشاء غرفة</button>
+    </div>
+    <div id="roomsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </section>
+
+  <!-- ROOM ACTIVE SECTION -->
+  <section id="roomSection" class="hidden">
+    <div class="glass rounded-3xl p-4">
+      <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+        <div>
+          <h2 id="roomName" class="font-black text-lg">اسم الغرفة</h2>
+          <p id="roomDescription" class="text-xs text-slate-500"></p>
+        </div>
+        <button onclick="leaveRoom()" class="bg-red-600 px-4 py-2 rounded-xl font-bold text-sm hover:bg-red-500 transition">مغادرة</button>
+      </div>
+
+      <div class="grid lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 min-h-[300px] bg-slate-950/60 rounded-2xl p-4 flex flex-col justify-between">
+          <div>
+            <h3 class="font-bold mb-3 text-sm">المتواجدون في الغرفة:</h3>
+            <div id="speakersGrid" class="flex flex-wrap gap-3"></div>
+          </div>
+
+          <div class="mt-8 flex justify-center gap-3">
+            <button id="micButton" onclick="toggleMic()" class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-500 transition">
+              <i class="fa-solid fa-microphone text-xl"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/60 rounded-2xl p-3 flex flex-col h-[400px]">
+          <div id="chatMessages" class="flex-1 overflow-y-auto space-y-2 mb-2 p-1"></div>
+          <form onsubmit="sendMessage(event)" class="flex gap-2">
+            <input id="chatInput" type="text" placeholder="اكتب رسالة..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 text-sm outline-none focus:border-indigo-500" />
+            <button class="bg-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-500 transition"><i class="fa-solid fa-paper-plane"></i></button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- LOGIN MODAL -->
+<div id="loginModal" class="hidden fixed inset-0 modal items-center justify-center p-4 z-50">
+  <div class="glass rounded-3xl p-6 w-full max-w-md">
+    <h2 class="text-xl font-bold mb-4">تسجيل الدخول السريع</h2>
+    <input id="loginName" type="text" placeholder="الاسم الظاهر" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mb-3 outline-none focus:border-indigo-500" />
+    <button onclick="loginUser()" class="w-full bg-indigo-600 py-3 rounded-xl font-bold hover:bg-indigo-500 transition">دخول</button>
+  </div>
+</div>
+
+<!-- CREATE ROOM MODAL -->
+<div id="createRoomModal" class="hidden fixed inset-0 modal items-center justify-center p-4 z-50">
+  <div class="glass rounded-3xl p-6 w-full max-w-md">
+    <h2 class="text-xl font-bold mb-4">إنشاء غرفة جديدة</h2>
+    <input id="newRoomName" type="text" placeholder="اسم الغرفة" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mb-3 outline-none focus:border-indigo-500" />
+    <input id="newRoomDesc" type="text" placeholder="وصف الغرفة" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mb-4 outline-none focus:border-indigo-500" />
+    <div class="flex gap-2">
+      <button onclick="submitCreateRoom()" class="flex-1 bg-indigo-600 py-3 rounded-xl font-bold hover:bg-indigo-500 transition">إنشاء</button>
+      <button onclick="closeCreateRoom()" class="px-5 bg-slate-800 rounded-xl">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const socket = io();
+  let currentUser = null;
+  let currentRoom = null;
+  let localStream = null;
+  let micEnabled = false;
+
+  socket.on("update_rooms", (rooms) => { renderRooms(rooms); });
+  socket.on("init_rooms", (rooms) => { renderRooms(rooms); });
+
+  socket.on("room_users_updated", (users) => {
+    const grid = document.getElementById("speakersGrid");
+    grid.innerHTML = "";
+    users.forEach(u => {
+      grid.innerHTML += `
+        <div class="bg-slate-900 px-4 py-2 rounded-xl text-center border border-slate-800">
+          <div class="avatar w-10 h-10 rounded-full mx-auto flex items-center justify-center font-bold mb-1 text-sm">${escapeHtml(u.name.charAt(0))}</div>
+          <span class="text-xs text-slate-300">${escapeHtml(u.name)}</span>
+        </div>`;
+    });
+  });
+
+  socket.on("new_message", (data) => {
+    const chatBox = document.getElementById("chatMessages");
+    chatBox.innerHTML += `<div class="text-xs bg-slate-900 p-2.5 rounded-xl border border-slate-800/80"><b class="text-indigo-400 ml-1">${escapeHtml(data.sender)}:</b>${escapeHtml(data.message)}</div>`;
+    chatBox.scrollTop = chatBox.scrollHeight;
+  });
+
+  function loginUser() {
+    const name = document.getElementById("loginName").value.trim();
+    if(!name) return;
+    currentUser = { id: "u_" + Date.now(), name };
+    document.getElementById("loginHeaderBtn").classList.add("hidden");
+    document.getElementById("profileArea").classList.remove("hidden");
+    document.getElementById("headerUserName").textContent = name;
+    document.getElementById("loginModal").classList.add("hidden");
+  }
+
+  function renderRooms(rooms) {
+    const grid = document.getElementById("roomsGrid");
+    grid.innerHTML = "";
+    rooms.forEach(r => {
+      grid.innerHTML += `
+        <div class="glass p-4 rounded-2xl flex justify-between items-center">
+          <div>
+            <h3 class="font-bold">${escapeHtml(r.name)}</h3>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(r.description)}</p>
+          </div>
+          <button onclick='joinRoom(${JSON.stringify(r)})' class="bg-indigo-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-500 transition">دخول</button>
+        </div>`;
+    });
+  }
+
+  function joinRoom(room) {
+    if(!currentUser) { openLogin(); return; }
+    currentRoom = room;
+    document.getElementById("roomsSection").classList.add("hidden");
+    document.getElementById("roomSection").classList.remove("hidden");
+    document.getElementById("roomName").textContent = room.name;
+    document.getElementById("roomDescription").textContent = room.description;
+    socket.emit("join_room", { roomId: room.id, user: currentUser });
+  }
+
+  function leaveRoom() {
+    socket.emit("leave_room");
+    document.getElementById("roomSection").classList.add("hidden");
+    document.getElementById("roomsSection").classList.remove("hidden");
+    document.getElementById("chatMessages").innerHTML = "";
+    currentRoom = null;
+    if(localStream) { localStream.getTracks().forEach(t => t.stop()); micEnabled = false; }
+  }
+
+  function sendMessage(e) {
+    e.preventDefault();
+    const input = document.getElementById("chatInput");
+    if(!input.value.trim() || !currentRoom) return;
+    socket.emit("send_message", { roomId: currentRoom.id, message: input.value.trim(), sender: currentUser.name });
+    input.value = "";
+  }
+
+  function openCreateRoom() { document.getElementById("createRoomModal").classList.remove("hidden"); }
+  function closeCreateRoom() { document.getElementById("createRoomModal").classList.hidden = true; document.getElementById("createRoomModal").classList.add("hidden"); }
+
+  function submitCreateRoom() {
+    const name = document.getElementById("newRoomName").value.trim();
+    const desc = document.getElementById("newRoomDesc").value.trim();
+    if(!name) return;
+    socket.emit("create_room", { name, description: desc, host: currentUser.name });
+    closeCreateRoom();
+  }
+
+  async function toggleMic() {
+    const btn = document.getElementById("micButton");
+    if(!micEnabled) {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micEnabled = true;
+        btn.className = "w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center hover:bg-emerald-500 transition";
+      } catch(e) { alert("يرجى إعطاء إذن استخدام الميكروفون"); }
+    } else {
+      if(localStream) localStream.getTracks().forEach(t => t.stop());
+      micEnabled = false;
+      btn.className = "w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-500 transition";
+    }
+  }
+
+  function openLogin() { document.getElementById("loginModal").classList.remove("hidden"); }
+  function requireLogin(cb) { if(!currentUser) openLogin(); else cb(); }
+  function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+</script>
+
+</body>
+</html>
